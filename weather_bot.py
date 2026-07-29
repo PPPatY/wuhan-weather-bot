@@ -13,70 +13,46 @@ from datetime import datetime
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 QWEATHER_KEY = os.environ.get("QWEATHER_KEY")  # 和风天气 API Key
+# 和风天气专属 API Host，控制台-设置页获取，如 abc123.def.qweatherapi.com
+# 公共域名 devapi/api.qweather.com 自 2026 年起逐步停服，必须使用专属 Host
+QWEATHER_HOST = os.environ.get("QWEATHER_HOST", "").replace("https://", "").strip("/")
 
 # 调试输出（不会泄露完整key）
 print(f"🔍 环境变量检查：")
 print(f"  BOT_TOKEN: {'✅ 已设置' if BOT_TOKEN else '❌ 未设置'}")
 print(f"  CHAT_ID: {'✅ 已设置' if CHAT_ID else '❌ 未设置'}")
 print(f"  QWEATHER_KEY: {'✅ 已设置 (前6位: ' + QWEATHER_KEY[:6] + '...)' if QWEATHER_KEY else '❌ 未设置'}")
+print(f"  QWEATHER_HOST: {QWEATHER_HOST or '❌ 未设置'}")
 
 # 武汉的城市 ID（和风天气）
 WUHAN_LOCATION_ID = "101200101"
 
 def get_wuhan_weather() -> dict:
-    """获取武汉未来三天天气预报（和风天气API）"""
+    """获取武汉未来三天天气预报（和风天气 API v7）"""
     if not QWEATHER_KEY:
         raise ValueError("QWEATHER_KEY 未设置")
+    if not QWEATHER_HOST:
+        raise ValueError(
+            "QWEATHER_HOST 未设置。请到 https://console.qweather.com/setting "
+            "复制专属 API Host（形如 abc123.def.qweatherapi.com），"
+            "并添加为 GitHub Secret QWEATHER_HOST"
+        )
 
-    # 和风天气 3天预报 API
-    # 免费订阅尝试使用 devapi，如果失败回退到 api 域名
-    urls = [
-        "https://devapi.qweather.com/v7/weather/3d",
-        "https://api.qweather.com/v7/weather/3d"
-    ]
+    url = f"https://{QWEATHER_HOST}/v7/weather/3d"
+    params = {"location": WUHAN_LOCATION_ID, "lang": "zh"}
+    # 新版规范：key 放请求头，不放 query
+    headers = {"X-QW-Api-Key": QWEATHER_KEY}
 
-    params = {
-        "location": WUHAN_LOCATION_ID,
-        "key": QWEATHER_KEY,
-        "lang": "zh",  # 中文
-    }
+    print(f"🌐 请求 {QWEATHER_HOST}/v7/weather/3d ...")
+    response = requests.get(url, params=params, headers=headers, timeout=10)
+    response.raise_for_status()
+    data = response.json()
 
-    last_error = None
-    for url in urls:
-        try:
-            print(f"🌐 尝试 {url.split('//')[1].split('/')[0]}...")
-            response = requests.get(url, params=params, timeout=10)
+    if data.get("code") != "200":
+        raise Exception(f"和风天气 API 返回错误码：{data.get('code')}")
 
-            # 检查响应
-            data = response.json()
-
-            # 如果是 403，记录并尝试下一个
-            if response.status_code == 403 or data.get("code") == "403":
-                print(f"   ❌ 403 无权限，尝试下一个域名...")
-                last_error = f"403 错误：{data.get('code', 'unknown')}"
-                continue
-
-            response.raise_for_status()
-
-            if data.get("code") == "200":
-                print(f"✅ 成功获取 {len(data['daily'])} 天天气数据")
-                return data
-            else:
-                print(f"   ❌ API 返回错误码：{data.get('code')}")
-                last_error = f"API 返回错误：{data.get('code')}"
-
-        except Exception as e:
-            print(f"   ❌ 请求失败：{e}")
-            last_error = str(e)
-            continue
-
-    # 所有尝试都失败
-    error_msg = f"所有 API 端点均失败。最后错误：{last_error}\n"
-    error_msg += "请检查：\n"
-    error_msg += "1. API Key 是否正确\n"
-    error_msg += "2. 是否在控制台启用了天气数据服务\n"
-    error_msg += "3. 访问 https://console.qweather.com 查看项目配置"
-    raise Exception(error_msg)
+    print(f"✅ 成功获取 {len(data['daily'])} 天天气数据")
+    return data
 
 
 def format_weather_message(data: dict) -> str:

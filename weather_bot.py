@@ -14,6 +14,12 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 QWEATHER_KEY = os.environ.get("QWEATHER_KEY")  # 和风天气 API Key
 
+# 调试输出（不会泄露完整key）
+print(f"🔍 环境变量检查：")
+print(f"  BOT_TOKEN: {'✅ 已设置' if BOT_TOKEN else '❌ 未设置'}")
+print(f"  CHAT_ID: {'✅ 已设置' if CHAT_ID else '❌ 未设置'}")
+print(f"  QWEATHER_KEY: {'✅ 已设置 (前6位: ' + QWEATHER_KEY[:6] + '...)' if QWEATHER_KEY else '❌ 未设置'}")
+
 # 武汉的城市 ID（和风天气）
 WUHAN_LOCATION_ID = "101200101"
 

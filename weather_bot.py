@@ -5,6 +5,7 @@
 """
 
 import os
+import time
 import requests
 from datetime import datetime
 
@@ -22,8 +23,8 @@ def get_wuhan_weather() -> str:
     except Exception as e:
         return f"⚠️ 天气获取失败：{e}"
 
-def send_to_telegram(text: str):
-    """发送消息到 Telegram"""
+def send_to_telegram(text: str, max_retries: int = 3):
+    """发送消息到 Telegram（带重试机制）"""
     if not BOT_TOKEN or not CHAT_ID:
         raise ValueError("BOT_TOKEN 或 CHAT_ID 未设置")
 
@@ -34,13 +35,25 @@ def send_to_telegram(text: str):
         "parse_mode": "HTML",
     }
 
-    try:
-        response = requests.post(url, json=payload, timeout=10)
-        response.raise_for_status()
-        print(f"✅ 消息已发送：{text[:50]}...")
-    except Exception as e:
-        print(f"❌ 发送失败：{e}")
-        raise
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"🔄 尝试发送消息 (第 {attempt}/{max_retries} 次)...")
+            response = requests.post(url, json=payload, timeout=15)
+            response.raise_for_status()
+            print(f"✅ 消息已发送：{text[:50]}...")
+            return
+        except requests.exceptions.Timeout:
+            print(f"⏱ 请求超时 (第 {attempt} 次)")
+            if attempt < max_retries:
+                wait_time = attempt * 2
+                print(f"⏳ 等待 {wait_time} 秒后重试...")
+                time.sleep(wait_time)
+            else:
+                print(f"❌ 重试 {max_retries} 次后仍然失败")
+                raise
+        except Exception as e:
+            print(f"❌ 发送失败：{e}")
+            raise
 
 if __name__ == "__main__":
     # 生成日期字符串

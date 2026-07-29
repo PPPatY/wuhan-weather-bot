@@ -28,39 +28,55 @@ def get_wuhan_weather() -> dict:
     if not QWEATHER_KEY:
         raise ValueError("QWEATHER_KEY 未设置")
 
-    # 和风天气 3天预报 API（免费订阅使用 devapi，商业订阅使用 api）
-    # 如果 devapi 403，可能需要在控制台订阅服务或使用商业版域名
-    url = "https://devapi.qweather.com/v7/weather/3d"
+    # 和风天气 3天预报 API
+    # 免费订阅尝试使用 devapi，如果失败回退到 api 域名
+    urls = [
+        "https://devapi.qweather.com/v7/weather/3d",
+        "https://api.qweather.com/v7/weather/3d"
+    ]
+
     params = {
         "location": WUHAN_LOCATION_ID,
         "key": QWEATHER_KEY,
         "lang": "zh",  # 中文
     }
 
-    try:
-        print("🌐 正在获取和风天气数据...")
-        response = requests.get(url, params=params, timeout=10)
+    last_error = None
+    for url in urls:
+        try:
+            print(f"🌐 尝试 {url.split('//')[1].split('/')[0]}...")
+            response = requests.get(url, params=params, timeout=10)
 
-        # 先检查状态码
-        if response.status_code == 403:
-            print(f"❌ 403 错误：API Key 可能无权限或未订阅服务")
-            print(f"   请访问 https://console.qweather.com 检查：")
-            print(f"   1. 项目是否已订阅天气数据服务")
-            print(f"   2. API Key 是否正确")
-            print(f"   3. 是否需要添加应用或API限制配置")
+            # 检查响应
+            data = response.json()
 
-        response.raise_for_status()
-        data = response.json()
+            # 如果是 403，记录并尝试下一个
+            if response.status_code == 403 or data.get("code") == "403":
+                print(f"   ❌ 403 无权限，尝试下一个域名...")
+                last_error = f"403 错误：{data.get('code', 'unknown')}"
+                continue
 
-        if data.get("code") != "200":
-            raise Exception(f"和风天气 API 返回错误：{data.get('code')}")
+            response.raise_for_status()
 
-        print(f"✅ 成功获取 {len(data['daily'])} 天天气数据")
-        return data
+            if data.get("code") == "200":
+                print(f"✅ 成功获取 {len(data['daily'])} 天天气数据")
+                return data
+            else:
+                print(f"   ❌ API 返回错误码：{data.get('code')}")
+                last_error = f"API 返回错误：{data.get('code')}"
 
-    except Exception as e:
-        print(f"❌ 天气获取失败：{e}")
-        raise
+        except Exception as e:
+            print(f"   ❌ 请求失败：{e}")
+            last_error = str(e)
+            continue
+
+    # 所有尝试都失败
+    error_msg = f"所有 API 端点均失败。最后错误：{last_error}\n"
+    error_msg += "请检查：\n"
+    error_msg += "1. API Key 是否正确\n"
+    error_msg += "2. 是否在控制台启用了天气数据服务\n"
+    error_msg += "3. 访问 https://console.qweather.com 查看项目配置"
+    raise Exception(error_msg)
 
 
 def format_weather_message(data: dict) -> str:

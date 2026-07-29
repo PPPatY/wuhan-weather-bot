@@ -28,7 +28,8 @@ def get_wuhan_weather() -> dict:
     if not QWEATHER_KEY:
         raise ValueError("QWEATHER_KEY 未设置")
 
-    # 和风天气 3天预报 API
+    # 和风天气 3天预报 API（免费订阅使用 devapi，商业订阅使用 api）
+    # 如果 devapi 403，可能需要在控制台订阅服务或使用商业版域名
     url = "https://devapi.qweather.com/v7/weather/3d"
     params = {
         "location": WUHAN_LOCATION_ID,
@@ -39,6 +40,15 @@ def get_wuhan_weather() -> dict:
     try:
         print("🌐 正在获取和风天气数据...")
         response = requests.get(url, params=params, timeout=10)
+
+        # 先检查状态码
+        if response.status_code == 403:
+            print(f"❌ 403 错误：API Key 可能无权限或未订阅服务")
+            print(f"   请访问 https://console.qweather.com 检查：")
+            print(f"   1. 项目是否已订阅天气数据服务")
+            print(f"   2. API Key 是否正确")
+            print(f"   3. 是否需要添加应用或API限制配置")
+
         response.raise_for_status()
         data = response.json()
 
